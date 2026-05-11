@@ -257,6 +257,17 @@ func (d *GuangYaPan) ensureAccessToken() error {
 	if d.AccessToken == "" && d.RefreshToken != "" {
 		return d.refreshToken()
 	}
+	// send_code=true means user wants us to send the SMS now
+	if d.AccessToken == "" && d.SendCode && d.PhoneNumber != "" {
+		log.Infof("GuangYaPan: send_code=true, requesting SMS verification...")
+		if err := d.requestVerificationID(); err != nil {
+			return err
+		}
+		// Save the CaptchaToken and VerificationID to storage
+		// User will receive SMS, then fill verify_code and save again
+		op.MustSaveDriverStorage(d)
+		return fmt.Errorf("SMS verification code has been sent to your phone, please check and fill in the verification code")
+	}
 	if d.AccessToken == "" && d.canSMSLogin() {
 		return d.loginBySMSCode()
 	}
@@ -329,7 +340,14 @@ func (d *GuangYaPan) requestVerificationID() error {
 			log.Errorf("GuangYaPan: ensureCaptchaToken failed: %v", err)
 			return err
 		}
-		log.Infof("GuangYaPan: got captcha token: %s", d.CaptchaToken[:min(20, len(d.CaptchaToken))]+"...")
+		log.Infof("GuangYaPan: got captcha token: %s", func() string {
+			if d.CaptchaToken != "" {
+				l := len(d.CaptchaToken)
+				if l > 20 { l = 20 }
+				return d.CaptchaToken[:l] + "..."
+			}
+			return "(empty)"
+		}())
 	}
 
 	phone := d.normalizePhoneE164(d.PhoneNumber)
@@ -369,7 +387,14 @@ func (d *GuangYaPan) ensureCaptchaToken() error {
 		log.Errorf("GuangYaPan: ensureCaptchaToken HTTP error: %v", err)
 		return err
 	}
-	log.Infof("GuangYaPan: ensureCaptchaToken response: error=%s, error_desc=%s, captcha_token=%s", resp.Error, resp.ErrorDesc, resp.CaptchaToken[:min(20, len(resp.CaptchaToken))]+"...")
+	log.Infof("GuangYaPan: ensureCaptchaToken response: error=%s, error_desc=%s, captcha_token=%s", resp.Error, resp.ErrorDesc, func() string {
+		if resp.CaptchaToken != "" {
+			l := len(resp.CaptchaToken)
+			if l > 20 { l = 20 }
+			return resp.CaptchaToken[:l] + "..."
+		}
+		return "(empty)"
+	}())
 	if resp.Error != "" {
 		return fmt.Errorf("get captcha token failed: %s", resp.ErrorDesc)
 	}
