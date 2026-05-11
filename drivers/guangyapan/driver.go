@@ -268,32 +268,42 @@ func (d *GuangYaPan) canSMSLogin() bool {
 }
 
 func (d *GuangYaPan) loginBySMSCode() error {
+	log.Infof("GuangYaPan: loginBySMSCode start, VerificationID=%s, VerifyCode=%s", d.VerificationID, d.VerifyCode)
 	if d.VerificationID == "" {
+		log.Infof("GuangYaPan: no verificationID, requesting one...")
 		if err := d.requestVerificationID(); err != nil {
+			log.Errorf("GuangYaPan: requestVerificationID failed: %v", err)
 			return err
 		}
+		log.Infof("GuangYaPan: got VerificationID=%s", d.VerificationID)
 	}
 
+	log.Infof("GuangYaPan: verifying SMS code, verification_id=%s", d.VerificationID)
 	var verifyResp verifyResp
 	_, err := d.accountClient.R().SetBody(map[string]interface{}{
 		"verification_id": d.VerificationID,
 		"verification_code": d.VerifyCode,
 	}).SetResult(&verifyResp).Post("/v1/auth/verification/verify")
 	if err != nil {
+		log.Errorf("GuangYaPan: verify SMS code HTTP error: %v", err)
 		return err
 	}
+	log.Infof("GuangYaPan: verify response: error=%s, error_desc=%s", verifyResp.Error, verifyResp.ErrorDesc)
 	if verifyResp.Error != "" {
 		return fmt.Errorf("verify SMS code failed: %s", verifyResp.ErrorDesc)
 	}
 
+	log.Infof("GuangYaPan: getting access token, clientID=%s", d.ClientID)
 	var tokenResp tokenResp
 	_, err = d.accountClient.R().SetBody(map[string]interface{}{
 		"verification_token": verifyResp.VerificationToken,
 		"client_id":          d.ClientID,
 	}).SetResult(&tokenResp).Post("/v1/auth/token")
 	if err != nil {
+		log.Errorf("GuangYaPan: get token HTTP error: %v", err)
 		return err
 	}
+	log.Infof("GuangYaPan: token response: error=%s, error_desc=%s, has_access_token=%v", tokenResp.Error, tokenResp.ErrorDesc, tokenResp.AccessToken != "")
 	if tokenResp.Error != "" {
 		return fmt.Errorf("get token failed: %s", tokenResp.ErrorDesc)
 	}
@@ -305,6 +315,7 @@ func (d *GuangYaPan) loginBySMSCode() error {
 
 	d.apiClient.SetHeader("Authorization", "Bearer "+d.AccessToken)
 	
+	log.Infof("GuangYaPan: login success, access_token obtained")
 	// Persist tokens
 	op.MustSaveDriverStorage(d)
 
@@ -313,41 +324,52 @@ func (d *GuangYaPan) loginBySMSCode() error {
 
 func (d *GuangYaPan) requestVerificationID() error {
 	if d.CaptchaToken == "" {
+		log.Infof("GuangYaPan: requesting captcha token first")
 		if err := d.ensureCaptchaToken(); err != nil {
+			log.Errorf("GuangYaPan: ensureCaptchaToken failed: %v", err)
 			return err
 		}
+		log.Infof("GuangYaPan: got captcha token: %s", d.CaptchaToken[:min(20, len(d.CaptchaToken))]+"...")
 	}
 
 	phone := d.normalizePhoneE164(d.PhoneNumber)
+	log.Infof("GuangYaPan: requesting SMS verification for phone: %s", phone)
+	
 	var resp verificationResp
 	_, err := d.accountClient.R().SetBody(map[string]interface{}{
-		"username":     phone,
-		"captcha_token": d.CaptchaToken,
-		"send_sms":     true,
+		"username":      phone,
+		"captcha_token":  d.CaptchaToken,
+		"send_sms":      true,
 	}).SetResult(&resp).Post("/v1/auth/verification")
 	if err != nil {
+		log.Errorf("GuangYaPan: requestVerificationID HTTP error: %v", err)
 		return err
 	}
+	log.Infof("GuangYaPan: requestVerificationID response: error=%s, error_desc=%s, verification_id=%s", resp.Error, resp.ErrorDesc, resp.VerificationID)
 	if resp.Error != "" {
 		return fmt.Errorf("request verification ID failed: %s", resp.ErrorDesc)
 	}
 
 	d.VerificationID = resp.VerificationID
 	d.SendCode = false
+	log.Infof("GuangYaPan: got verification_id: %s", resp.VerificationID)
 
 	return nil
 }
 
 func (d *GuangYaPan) ensureCaptchaToken() error {
 	phone := d.normalizePhoneE164(d.PhoneNumber)
+	log.Infof("GuangYaPan: ensureCaptchaToken, phone=%s, clientID=%s", phone, d.ClientID)
 	var resp captchaInitResp
 	_, err := d.accountClient.R().SetBody(map[string]interface{}{
 		"client_id":    d.ClientID,
 		"phone_number": phone,
 	}).SetResult(&resp).Post("/v1/captcha/init")
 	if err != nil {
+		log.Errorf("GuangYaPan: ensureCaptchaToken HTTP error: %v", err)
 		return err
 	}
+	log.Infof("GuangYaPan: ensureCaptchaToken response: error=%s, error_desc=%s, captcha_token=%s", resp.Error, resp.ErrorDesc, resp.CaptchaToken[:min(20, len(resp.CaptchaToken))]+"...")
 	if resp.Error != "" {
 		return fmt.Errorf("get captcha token failed: %s", resp.ErrorDesc)
 	}
