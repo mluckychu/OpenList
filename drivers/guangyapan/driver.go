@@ -715,7 +715,7 @@ func (d *GuangYaPan) calcUploadPartSize(fileSize int64) int64 {
 }
 
 func (d *GuangYaPan) setTempStatus(msg string) {
-	log.Infof("GuangYaPan storage [%s] temp status: %s", d.GetStorage().GetID(), msg)
+	log.Infof("GuangYaPan storage [%s] temp status: %s", d.GetStorage().ID, msg)
 }
 
 func (d *GuangYaPan) accountErr(desc, err string, resp *resty.Response) string {
