@@ -339,9 +339,11 @@ func (d *GuangYaPan) requestVerificationID() error {
 }
 
 func (d *GuangYaPan) ensureCaptchaToken() error {
+	phone := d.normalizePhoneE164(d.PhoneNumber)
 	var resp captchaInitResp
 	_, err := d.accountClient.R().SetBody(map[string]interface{}{
-		"client_id": d.ClientID,
+		"client_id":    d.ClientID,
+		"phone_number": phone,
 	}).SetResult(&resp).Post("/v1/captcha/init")
 	if err != nil {
 		return err
