@@ -3,7 +3,8 @@ name: Build and Push to Docker Hub
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - 'drivers/guangyapan/**'
       - '**.go'
@@ -29,10 +30,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # 鑾峰彇瀹屾暣 git 鍘嗗彶锛屼緵 git log/describe 浣跨敤
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25.0'
+          go-version-file: 'go.mod'  # 鑷姩浠?go.mod 璇诲彇姝ｇ‘鐗堟湰锛?.24.x锛?          cache: true
 
       - name: Cache Musl
         id: cache-musl
@@ -65,7 +68,7 @@ jobs:
           username: dannechu
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract metadata
+      - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -82,19 +85,55 @@ jobs:
           context: .
           file: Dockerfile.ci
           push: true
-          build-args: BASE_IMAGE_TAG=base
+          build-args: |
+            BASE_IMAGE_TAG=base
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build and push FFmpeg variant
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.ci
+          push: true
+          build-args: |
+            BASE_IMAGE_TAG=ffmpeg
+            INSTALL_FFMPEG=true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:ffmpeg
+            ${{ env.DOCKER_IMAGE }}:latest-ffmpeg
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push AIO variant
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.ci
+          push: true
+          build-args: |
+            BASE_IMAGE_TAG=aio
+            INSTALL_FFMPEG=true
+            INSTALL_ARIA2=true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:aio
+            ${{ env.DOCKER_IMAGE }}:latest-aio
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Summary
         run: |
-          echo "## ✅ Docker Image Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "## 鉁?Docker Image Build Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.DOCKER_IMAGE }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** `${{ env.DOCKER_IMAGE }}`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Available Tags:**" >> $GITHUB_STEP_SUMMARY
-          echo "- \`latest\` - Latest build from main branch" >> $GITHUB_STEP_SUMMARY
-          echo "- \`guangyapan\` - Stable GuangYaPan driver build" >> $GITHUB_STEP_SUMMARY
+          echo "- `latest` - Latest build from main branch" >> $GITHUB_STEP_SUMMARY
+          echo "- `guangyapan` - Stable GuangYaPan driver build" >> $GITHUB_STEP_SUMMARY
+          echo "- `ffmpeg` / `latest-ffmpeg` - FFmpeg variant" >> $GITHUB_STEP_SUMMARY
+          echo "- `aio` / `latest-aio` - All-in-one variant" >> $GITHUB_STEP_SUMMARY
