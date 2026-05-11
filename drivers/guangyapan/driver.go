@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -15,7 +14,6 @@ import (
 	"github.com/OpenListTeam/OpenList/v4/internal/errs"
 	"github.com/OpenListTeam/OpenList/v4/internal/model"
 	"github.com/OpenListTeam/OpenList/v4/internal/op"
-	"github.com/OpenListTeam/OpenList/v4/internal/stream"
 	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/go-resty/resty/v2"
@@ -467,14 +465,7 @@ func (d *GuangYaPan) multipartUploadToOSS(ctx context.Context, token *uploadToke
 
 	// For small files, use PutObject directly
 	if file.GetSize() <= 100*1024*1024 {
-		reader := file
-		if up != nil {
-			reader = driver.NewLimitedUploadStream(ctx, &driver.ReaderUpdatingProgress{
-				Reader:         file,
-				UpdateProgress: up,
-			})
-		}
-		err = bucket.PutObject(token.ObjectPath, reader)
+		err = bucket.PutObject(token.ObjectPath, file)
 		if err != nil {
 			return err
 		}
