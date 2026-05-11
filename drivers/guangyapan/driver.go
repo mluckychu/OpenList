@@ -700,7 +700,7 @@ func (d *GuangYaPan) multipartUploadToOSS(ctx context.Context, bucket *oss.Bucke
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
-	return bucket.UploadFile(objectPath, f.Name(), partSize, oss.Routines(3), oss.Progress(true))
+	return bucket.UploadFile(objectPath, f.Name(), partSize, oss.Routines(3))
 }
 
 func (d *GuangYaPan) calcUploadPartSize(fileSize int64) int64 {
